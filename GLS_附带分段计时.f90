@@ -72,6 +72,7 @@
             integer :: i,j,maxJ, progressCounter
             real(kind=8) :: maxOfCol
             real(kind=8) :: time1
+        real(kind=8) :: time2,ctime1,ctime2,ctime3,ctime4  ! 辅助测试用
 
             time1=dclock()       ! 计时
             write (unit=6,fmt="(A,I0)") "@GaussLinearSolver:  N=",n
@@ -81,8 +82,15 @@
             progressCounter=0
             
             allocate(x(n))
+
+        ctime1=0d0    ! 辅助测试用
+        ctime2=0d0
+        ctime3=0d0
+        ctime4=0d0
             
             do j=1,n
+                
+            time2=dclock()   ! 辅助测试用
                 maxOfCol=0d0
                 do i=j,n                        !从第j行开始往下找第j列的最大值
                     if (abs(Ab(j,i))>maxOfCol) then
@@ -90,8 +98,10 @@
                         maxJ=i
                     end if
                 end do
+            ctime1=ctime1+dclock()-time2  ! 辅助测试用
 
                 
+            time2=dclock()   ! 辅助测试用
                 if (maxOfCol<eps) then          !若最大值为零，则无法确保主对角元素非零，矩阵A不可逆
                     write (unit=6,fmt="(A)") "@GaussLinearSolver[Function]: error:输入的A不是可逆矩阵！"
                     x=0d0
@@ -108,8 +118,11 @@
                 
                 !dir$ parallel
                 Ab(j:n+1,j)=Ab(j:n+1,j)/Ab(j,j)              !单位化
-
+            ctime2=ctime2+dclock()-time2  ! 辅助测试用
                 
+                
+                
+            time2=dclock()   ! 辅助测试用
                 !$omp parallel default(none) shared(Ab,j,n)
                 !$omp do schedule(static) private(i)
                     do i=1,j-1                           !消元：用第j行将第j列的非对角元归零
@@ -124,18 +137,24 @@
                     end do
                 !$omp end do
                 !$omp end parallel
-
-                ! 输出进度                
+            ctime3=ctime3+dclock()-time2  ! 辅助测试用
+                
+            time2=dclock()   ! 辅助测试用
                 do while (progressCounter/real(cmdWidth-1)<(2d0*n-j+1)*j/n/(n+1))
                     i=putc('*')
                     progressCounter=progressCounter+1
                 end do
+            ctime4=ctime4+dclock()-time2  ! 辅助测试用
             end do
-            
             !dir$ parallel
             x=Ab(n+1,:)
             write (unit=6,fmt="(<cmdWidth-1-progressCounter>A)") ("*",i=progressCounter+1,cmdWidth-1)
             write (unit=6,fmt="(A,F0.3,A)") "Solving procedure finished.(Elapsed time:",dclock()-time1,"s)"
+            
+        write(*,"(A,F0.3,A)")"ctime1=",ctime1,"s"    ! 辅助测试用
+        write(*,"(A,F0.3,A)")"ctime2=",ctime2,"s"
+        write(*,"(A,F0.3,A)")"ctime3=",ctime3,"s"
+        write(*,"(A,F0.3,A)")"ctime4=",ctime4,"s"
             
             return
         end function GaussLinearSolver_Ab
