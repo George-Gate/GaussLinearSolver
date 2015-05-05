@@ -67,7 +67,7 @@
             integer, parameter :: cmdWidth=80
             
             integer,intent(in) :: n
-            real(kind=8) :: Ab(n+1,n)
+            real(kind=8),intent(inout) :: Ab(n+1,n)
             real(kind=8),allocatable :: x(:)
             integer :: i,j,maxJ, progressCounter
             real(kind=8) :: maxOfCol
@@ -91,7 +91,6 @@
                     end if
                 end do
 
-                
                 if (maxOfCol<eps) then          !若最大值为零，则无法确保主对角元素非零，矩阵A不可逆
                     write (unit=6,fmt="(A)") "@GaussLinearSolver[Function]: error:输入的A不是可逆矩阵！"
                     x=0d0
@@ -108,35 +107,40 @@
                 
                 !dir$ parallel
                 Ab(j:n+1,j)=Ab(j:n+1,j)/Ab(j,j)              !单位化
-
                 
+
                 !$omp parallel default(none) shared(Ab,j,n)
-                !$omp do schedule(static) private(i)
-                    do i=1,j-1                           !消元：用第j行将第j列的非对角元归零
+                !$omp do schedule(guided) private(i)
+                    do i=j+1,n                                !消元：用第j行将A(j,j)下方的元素归零,最终得到上三角矩阵
+                        !dir$ parallel
                         Ab(j+1:n+1,i)=Ab(j+1:n+1,i)-Ab(j+1:n+1,j)*Ab(j,i)
-                        Ab(j,i)=0.0                          !防止出现1.0E-38这样的数......
-                    end do
-                !$omp end do nowait
-                !$omp do schedule(static) private(i)
-                    do i=j+1,n
-                        Ab(j+1:n+1,i)=Ab(j+1:n+1,i)-Ab(j+1:n+1,j)*Ab(j,i)
-                        Ab(j,i)=0.0                          !防止出现1.0E-38这样的数......
+                        Ab(j,i)=0d0                           !防止出现1.0E-38这样的数......
                     end do
                 !$omp end do
                 !$omp end parallel
 
-                ! 输出进度                
-                do while (progressCounter/real(cmdWidth-1)<(2d0*n-j+1)*j/n/(n+1))
+                
+                do while (progressCounter/real(cmdWidth-1)<(real(j)*(j**2d0-3d0*j*n+3d0*n**2d0-1d0))/(n*(n-1d0)*(n+1d0)))
                     i=putc('*')
                     progressCounter=progressCounter+1
                 end do
             end do
-            
+
             !dir$ parallel
-            x=Ab(n+1,:)
+            x(:)=Ab(n+1,:)
+            
+            do j=n,2,-1               ! 将上三角矩阵消元成对角阵,使用的对角元为A(j,j)
+                do i=j-1,1,-1
+                    x(i)=x(i)-Ab(j,i)*x(j)
+                    Ab(j,i)=0d0
+                end do
+            end do
+            
+            Ab(n+1,:)=x(:)
+            
             write (unit=6,fmt="(<cmdWidth-1-progressCounter>A)") ("*",i=progressCounter+1,cmdWidth-1)
             write (unit=6,fmt="(A,F0.3,A)") "Solving procedure finished.(Elapsed time:",dclock()-time1,"s)"
-            
+        
             return
         end function GaussLinearSolver_Ab
     end module GLS
