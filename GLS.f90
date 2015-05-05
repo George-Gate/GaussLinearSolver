@@ -119,7 +119,7 @@
                 !$omp end do
                 !$omp end parallel
 
-                
+                ! 输出进度
                 do while (progressCounter/real(cmdWidth-1)<(real(j)*(j**2d0-3d0*j*n+3d0*n**2d0-1d0))/(n*(n-1d0)*(n+1d0)))
                     i=putc('*')
                     progressCounter=progressCounter+1
